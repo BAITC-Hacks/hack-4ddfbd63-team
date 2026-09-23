@@ -166,4 +166,59 @@ describe("safe prototype cart", () => {
     expect(service.getCart("session").itemCount).toBe(3);
     expect(getProductDetail).toHaveBeenCalledTimes(2);
   });
+
+  it("удаляет товар только после явного вызова removeItem", async () => {
+    const item = product({ price: 100, stock: 10 });
+    const { service } = serviceWithProducts(item, item);
+    const proposal = await service.createProposal("session", item.id, 2);
+    await service.confirmProposal("session", proposal.proposalId);
+
+    // Открытие confirmation и его отмена — только frontend state: removeItem не вызывается.
+    expect(service.getCart("session").itemCount).toBe(2);
+    expect(service.getCart("session").itemCount).toBe(2);
+
+    const removal = service.removeItem("session", item.id);
+
+    expect(removal.removedProductId).toBe(item.id);
+    expect(removal.cart).toEqual({ items: [], itemCount: 0, total: 0, currency: null });
+  });
+
+  it("после удаления пересчитывает total по оставшимся товарам", async () => {
+    const first = product({ id: "first", price: 100, stock: 10 });
+    const second = product({ id: "second", price: 50, stock: 10 });
+    const { service } = serviceWithProducts(first, first, second, second);
+
+    const firstProposal = await service.createProposal("session", first.id, 2);
+    await service.confirmProposal("session", firstProposal.proposalId);
+    const secondProposal = await service.createProposal("session", second.id, 3);
+    await service.confirmProposal("session", secondProposal.proposalId);
+    expect(service.getCart("session").total).toBe(350);
+
+    const removal = service.removeItem("session", first.id);
+
+    expect(removal.cart.items).toHaveLength(1);
+    expect(removal.cart.itemCount).toBe(3);
+    expect(removal.cart.total).toBe(150);
+  });
+
+  it("повторное удаление обрабатывается безопасно", async () => {
+    const item = product({ stock: 10 });
+    const { service } = serviceWithProducts(item, item);
+    const proposal = await service.createProposal("session", item.id, 1);
+    await service.confirmProposal("session", proposal.proposalId);
+    service.removeItem("session", item.id);
+
+    expect(() => service.removeItem("session", item.id)).toThrowError(
+      expect.objectContaining({ code: "cart_item_not_found", status: 404 }),
+    );
+    expect(service.getCart("session").items).toHaveLength(0);
+  });
+
+  it.each(["", "   "])("невалидный productId=%j отклоняется", (productId) => {
+    const { service } = serviceWithProducts(product());
+
+    expect(() => service.removeItem("session", productId)).toThrowError(
+      expect.objectContaining({ code: "invalid_product_id", status: 400 }),
+    );
+  });
 });

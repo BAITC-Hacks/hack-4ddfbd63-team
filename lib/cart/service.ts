@@ -2,6 +2,7 @@ import type {
   CartConfirmation,
   CartItem,
   CartProposal,
+  CartRemoval,
   CartSummary,
 } from "@/lib/cart/types";
 import type { EktProduct } from "@/lib/ekt/types";
@@ -76,6 +77,30 @@ export class CartService {
         ? null
         : items.reduce((sum, item) => sum + (item.product.price ?? 0) * item.quantity, 0),
       currency: currencies.size === 1 ? Array.from(currencies)[0] : null,
+    };
+  }
+
+  removeItem(cartId: string, productId: string): CartRemoval {
+    const normalizedProductId = productId.trim();
+    if (!normalizedProductId) {
+      throw new CartDomainError("Не указан товар.", 400, "invalid_product_id");
+    }
+
+    const cart = this.carts.get(cartId);
+    if (!cart?.has(normalizedProductId)) {
+      throw new CartDomainError(
+        "Товар в корзине не найден или уже удалён.",
+        404,
+        "cart_item_not_found",
+      );
+    }
+
+    cart.delete(normalizedProductId);
+    if (cart.size === 0) this.carts.delete(cartId);
+
+    return {
+      removedProductId: normalizedProductId,
+      cart: this.getCart(cartId),
     };
   }
 

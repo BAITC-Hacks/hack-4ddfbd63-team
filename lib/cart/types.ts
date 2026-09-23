@@ -30,3 +30,8 @@ export type CartConfirmation = {
   cart: CartSummary;
   alreadyConfirmed: boolean;
 };
+
+export type CartRemoval = {
+  removedProductId: string;
+  cart: CartSummary;
+};
