@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useRef, useState } from "react";
 
+import { CartProposalCard } from "@/components/cart-proposal-card";
 import { ProductCard } from "@/components/product-card";
+import type { CartProposal } from "@/lib/cart/types";
 import type { EktProduct } from "@/lib/ekt/types";
 
 type Message = {
@@ -11,6 +13,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   products?: EktProduct[];
+  cartProposal?: CartProposal | null;
 };
 
 const starterMessages: Message[] = [
@@ -54,15 +57,23 @@ export function Chat() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages.map(({ role, content: messageContent }) => ({
-            role,
-            content: messageContent,
-          })),
+          messages: nextMessages.map((message) => {
+            const productContext = message.products?.length
+              ? `\n\n[Контекст приложения: показаны товары ${message.products
+                  .map((product) => `id=${product.id}, название=${product.name}`)
+                  .join("; ")}]`
+              : "";
+            return {
+              role: message.role,
+              content: `${message.content}${productContext}`,
+            };
+          }),
         }),
       });
       const data = (await response.json()) as {
         message?: string;
         products?: EktProduct[];
+        cartProposal?: CartProposal | null;
         error?: string;
       };
       if (!response.ok) throw new Error(data.error ?? "Не удалось получить ответ.");
@@ -73,6 +84,7 @@ export function Chat() {
           role: "assistant",
           content: data.message ?? "Нет ответа.",
           products: data.products,
+          cartProposal: data.cartProposal,
         },
       ]);
     } catch (error) {
@@ -145,6 +157,11 @@ export function Chat() {
                     ))}
                   </div>
                 )}
+                {message.cartProposal && (
+                  <div className="mt-3">
+                    <CartProposalCard proposal={message.cartProposal} />
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -209,4 +226,3 @@ export function Chat() {
     </main>
   );
 }
-

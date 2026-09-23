@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import type { CartItem } from "@/lib/cart/types";
+import type { CartSummary } from "@/lib/cart/types";
 
 function formatPrice(price: number | null, currency: string | null, quantity: number) {
   if (price === null) return "Цена не указана";
@@ -21,19 +21,19 @@ function formatPrice(price: number | null, currency: string | null, quantity: nu
 }
 
 export default function CartPage() {
-  const [items, setItems] = useState<CartItem[] | null>(null);
+  const [cart, setCart] = useState<CartSummary | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     void fetch("/api/cart")
       .then(async (response) => {
-        const data = (await response.json()) as { items?: CartItem[]; error?: string };
+        const data = (await response.json()) as CartSummary & { error?: string };
         if (!response.ok) throw new Error(data.error ?? "Не удалось загрузить корзину.");
-        setItems(data.items ?? []);
+        setCart(data);
       })
       .catch((requestError: unknown) => {
         setError(requestError instanceof Error ? requestError.message : "Ошибка загрузки.");
-        setItems([]);
+        setCart({ items: [], itemCount: 0, total: 0, currency: null });
       });
   }, []);
 
@@ -52,9 +52,9 @@ export default function CartPage() {
         </Link>
       </div>
 
-      {items === null ? (
+      {cart === null ? (
         <p className="py-12 text-sm text-[#65736f]">Загружаем корзину…</p>
-      ) : items.length === 0 ? (
+      ) : cart.items.length === 0 ? (
         <div className="py-20 text-center">
           <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-[#f1f4f3] text-2xl">⌁</div>
           <h2 className="mt-4 text-lg font-bold">Корзина пуста</h2>
@@ -70,7 +70,7 @@ export default function CartPage() {
         </div>
       ) : (
         <div className="divide-y divide-[#e8eeeb]">
-          {items.map(({ product, quantity }) => (
+          {cart.items.map(({ product, quantity }) => (
             <article key={product.id} className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center">
               <div className="min-w-0 flex-1">
                 <h2 className="font-bold leading-snug">{product.name}</h2>
@@ -88,6 +88,14 @@ export default function CartPage() {
               </div>
             </article>
           ))}
+          <div className="flex items-center justify-between border-t-2 border-[#dbe4e1] py-5">
+            <span className="text-sm font-bold text-[#65736f]">
+              Всего товаров: {cart.itemCount}
+            </span>
+            <span className="text-xl font-extrabold">
+              Итого: {formatPrice(cart.total, cart.currency, 1)}
+            </span>
+          </div>
         </div>
       )}
 

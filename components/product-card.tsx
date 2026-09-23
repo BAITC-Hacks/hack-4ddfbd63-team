@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
+import { CartProposalCard } from "@/components/cart-proposal-card";
+import type { CartProposal } from "@/lib/cart/types";
 import type { EktProduct } from "@/lib/ekt/types";
 
 function formatPrice(price: number | null, currency: string | null): string {
@@ -31,28 +32,30 @@ function stockLabel(product: EktProduct): string {
 }
 
 export function ProductCard({ product }: { product: EktProduct }) {
-  const [confirming, setConfirming] = useState(false);
+  const [choosingQuantity, setChoosingQuantity] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [added, setAdded] = useState(false);
+  const [proposal, setProposal] = useState<CartProposal | null>(null);
   const canAttemptAdd = product.available !== false && product.stock !== 0;
 
-  async function confirmAdd() {
+  async function createProposal() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/cart", {
+      const response = await fetch("/api/cart/proposals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId: product.id, quantity }),
       });
-      const data = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? "Не удалось добавить товар.");
-      setAdded(true);
-      setConfirming(false);
+      const data = (await response.json()) as { proposal?: CartProposal; error?: string };
+      if (!response.ok || !data.proposal) {
+        throw new Error(data.error ?? "Не удалось создать предложение.");
+      }
+      setProposal(data.proposal);
+      setChoosingQuantity(false);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Ошибка добавления.");
+      setError(requestError instanceof Error ? requestError.message : "Ошибка предложения.");
     } finally {
       setBusy(false);
     }
@@ -132,16 +135,11 @@ export function ProductCard({ product }: { product: EktProduct }) {
       )}
 
       <div className="mt-4 border-t border-[#edf1ef] pt-3">
-        {added ? (
-          <div className="flex items-center justify-between gap-3 rounded-xl bg-[#eaf7f1] px-3 py-2 text-sm">
-            <span className="font-semibold text-[#176a48]">Товар добавлен после проверки остатка</span>
-            <Link className="font-bold text-[#176a48] underline" href="/cart">
-              В корзину
-            </Link>
-          </div>
-        ) : confirming ? (
-          <div className="rounded-xl bg-[#fff5f4] p-3">
-            <p className="text-sm font-semibold">Подтвердите добавление в корзину</p>
+        {proposal ? (
+          <CartProposalCard proposal={proposal} />
+        ) : choosingQuantity ? (
+          <div className="rounded-xl bg-[#f5f7f6] p-3">
+            <p className="text-sm font-semibold">Укажите количество</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
                 aria-label="Количество"
@@ -156,15 +154,15 @@ export function ProductCard({ product }: { product: EktProduct }) {
                 className="h-9 rounded-lg bg-[#e6332a] px-4 text-sm font-bold text-white hover:bg-[#bd241d] disabled:opacity-60"
                 type="button"
                 disabled={busy}
-                onClick={confirmAdd}
+                onClick={createProposal}
               >
-                {busy ? "Проверяем остаток…" : "Да, добавить"}
+                {busy ? "Получаем данные…" : "Продолжить"}
               </button>
               <button
                 className="h-9 px-2 text-sm font-semibold text-[#65736f]"
                 type="button"
                 disabled={busy}
-                onClick={() => setConfirming(false)}
+                onClick={() => setChoosingQuantity(false)}
               >
                 Отмена
               </button>
@@ -175,7 +173,7 @@ export function ProductCard({ product }: { product: EktProduct }) {
             className="rounded-xl bg-[#10231f] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#29453d] disabled:cursor-not-allowed disabled:bg-[#b6bfbc]"
             type="button"
             disabled={!canAttemptAdd}
-            onClick={() => setConfirming(true)}
+            onClick={() => setChoosingQuantity(true)}
           >
             {canAttemptAdd ? "Добавить в корзину" : "Недоступно"}
           </button>
